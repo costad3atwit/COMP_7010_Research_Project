@@ -1,4 +1,5 @@
 import random
+import math
 import pytest
 from inputs import generateDuplicates, generateBackwards, generateRandom, generateKiller
 
@@ -108,9 +109,47 @@ def merge(arr, start, mid, stop):
 
     return comparisons, swaps
 
+def heapify(arr, size, i):
+    largest = i
+    leftChild = 2*i + 1
+    rightChild = 2*i + 2
+
+    comps = 0
+    swaps = 0
+
+    if leftChild < size:
+        comps += 1
+        if arr[leftChild] > arr[largest]:
+            largest = leftChild
+    if rightChild < size:
+        comps += 1
+        if arr[rightChild] > arr[largest]:
+            largest = rightChild
+
+    c = 0
+    s = 0
+    if largest != i:
+        swaps += 1
+        arr[largest], arr[i] = arr[i], arr[largest]
+        c, s = heapify(arr, size, largest)
+    return comps+c, swaps+s
+
 def heapsort(arr):
-    #TODO: IMPLEMENT HEAPSORT - ANDREW
-    pass
+    comparisons = 0
+    swaps = 0
+    for i in range( math.floor(len(arr)/2), -1, -1 ):
+        c,s = heapify(arr, len(arr), i)
+        comparisons += c
+        swaps += s
+    
+    for end in range(len(arr)-1, 0, -1):
+        swaps += 1
+        arr[0],arr[end] = arr[end],arr[0]
+        c,s = heapify(arr, end, 0)
+        comparisons += c
+        swaps += s
+
+    return comparisons, swaps
 
 ### TESTING & VALIDATION ###
 
@@ -136,8 +175,15 @@ def test_mergesort(generator, size):
     assert total_comparisons <= size * max(0, (size - 1).bit_length())
     print(f"{generator.__name__}({size}): comparisons={total_comparisons}, swaps={total_swaps}")
 
-def test_heapsort():
-    pass
+def test_heapsort(size, rang):
+    arr = [random.randint(0,rang) for i in range(size)]
+    expected = sorted(arr)
+
+    comparisons, swaps = heapsort(arr)
+
+    assert arr == expected
+
+    print(f"Comparisons: {comparisons}\nSwaps: {swaps}")
 
 def test_partition():
     pass
