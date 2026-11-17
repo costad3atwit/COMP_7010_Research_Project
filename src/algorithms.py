@@ -6,14 +6,11 @@ from inputs import generateDuplicates, generateBackwards, generateRandom, genera
 
 
 # pivot functions
-# BUG: returns 0 instead of l. On any subarray (l > 0) partition 
-# swaps a[0] (see line 37) wjich is an element OUTSIDE the range being sorted
 def firstPivot(arr, l, h):
-    return 0
+    return l
 
-# BUG: same as above but for hi instead of low
 def lastPivot(arr, l, h):
-    return len(arr) -1
+    return h
 
 def randomPivot(arr, low, high):
     return random.randint(low, high)
@@ -35,8 +32,8 @@ def medianPivot(arr, low, high):
 
 def partition(a, low, high, pivotFunc):
     pivot = pivotFunc(a, low, high)
-    # TODO: remove the below debug line so timings aren't skewed.
-    print("bad") if medianPivot(a,low,high) != midpointPivot(a,low,high) else None
+    # # TODO: remove the below debug line so timings aren't skewed.
+    # print("bad") if medianPivot(a,low,high) != midpointPivot(a,low,high) else None
     a[pivot], a[high] = a[high], a[pivot]
     pivot, wall = a[high], low
     comparisons = 0
@@ -232,7 +229,7 @@ def test_heapsort_comparison_bound(input_name, size):
     assert comparisons <= 2 * size * (size - 1).bit_length() + 2 * size
 
 
-@pytest.mark.parametrize("pivotFunc", [randomPivot, midpointPivot, medianPivot])
+@pytest.mark.parametrize("pivotFunc", [randomPivot, midpointPivot, firstPivot, lastPivot])
 def test_partition(pivotFunc):
     arr = generateRandom(1000)
     original = list(arr)
