@@ -1,13 +1,17 @@
 import random
 import math
+from collections import Counter
 import pytest
 from inputs import generateDuplicates, generateBackwards, generateRandom, generateKiller
 
 
 # pivot functions
+# BUG: returns 0 instead of l. On any subarray (l > 0) partition 
+# swaps a[0] (see line 37) wjich is an element OUTSIDE the range being sorted
 def firstPivot(arr, l, h):
     return 0
 
+# BUG: same as above but for hi instead of low
 def lastPivot(arr, l, h):
     return len(arr) -1
 
@@ -31,6 +35,7 @@ def medianPivot(arr, low, high):
 
 def partition(a, low, high, pivotFunc):
     pivot = pivotFunc(a, low, high)
+    # TODO: remove the below debug line so timings aren't skewed.
     print("bad") if medianPivot(a,low,high) != midpointPivot(a,low,high) else None
     a[pivot], a[high] = a[high], a[pivot]
     pivot, wall = a[high], low
@@ -60,6 +65,8 @@ def quicksort(arr, start, stop, pivotFunc=firstPivot):
 
     return total_comparisons, total_swaps
 
+# Note: mergesort never exchanges elements, so its "swaps" count is the number
+# of array writes made while merging. Quicksort/heapsort "swaps" are exchanges.
 def mergesort(arr, start, stop):
     if start >= stop:
         return 0, 0
@@ -151,44 +158,90 @@ def heapsort(arr):
 
     return comparisons, swaps
 
+### SHARED MEASUREMENT HELPERS ###
+# Used by the tests below and by benchmark.py so both treat every algorithm the
+# same way. Each SORTERS entry sorts `arr` in place and returns
+# (comparisons, swaps).
+
+SORTERS = {
+    "quicksort_first":    lambda arr: quicksort(arr, 0, len(arr) - 1, firstPivot),
+    "quicksort_last":     lambda arr: quicksort(arr, 0, len(arr) - 1, lastPivot),
+    "quicksort_random":   lambda arr: quicksort(arr, 0, len(arr) - 1, randomPivot),
+    "quicksort_midpoint": lambda arr: quicksort(arr, 0, len(arr) - 1, midpointPivot),
+    "quicksort_median3":  lambda arr: quicksort(arr, 0, len(arr) - 1, medianPivot),
+    "mergesort":          lambda arr: mergesort(arr, 0, len(arr) - 1),
+    "heapsort":           heapsort,
+}
+
+# Each INPUTS entry takes a size n and returns a list of n ints, or None while
+# the generator is still a stub (callers skip those).
+INPUTS = {
+    "random":     generateRandom,
+    "backwards":  generateBackwards,
+    "sorted":     lambda n: list(range(1, n + 1)),
+    "equal":      lambda n: [7] * n,
+    "duplicates": lambda n: generateDuplicates(n, n // 2, max(1, n // 10)),
+    "killer":     generateKiller,
+}
+
+
+def is_correctly_sorted(original, result):
+    """True if `result` is a sorted permutation of `original`."""
+    return (
+        len(result) == len(original)
+        and all(result[i] <= result[i + 1] for i in range(len(result) - 1))
+        and Counter(result) == Counter(original)
+    )
+
+
 ### TESTING & VALIDATION ###
 
-def test_quicksort():
-    for f in [firstPivot, lastPivot, randomPivot, medianPivot, midpointPivot]:
-        arr = generateRandom(100000)
-        total_comparisons, total_swaps = quicksort(arr, 0, len(arr) - 1, f)
-        print(f"Total comparisons: {total_comparisons}, Total swaps: {total_swaps}")
+TEST_SIZES = [0, 1, 2, 3, 10, 1000]
 
-# TODO: add generateDuplicates / generateKiller once they're implemented
-@pytest.mark.parametrize("generator", [generateRandom, generateBackwards])
-@pytest.mark.parametrize("size", [0, 1, 2, 10, 1000, 100000])
-def test_mergesort(generator, size):
-    arr = generator(size)
-    expected = sorted(arr)
 
-    total_comparisons, total_swaps = mergesort(arr, 0, len(arr) - 1)
+@pytest.mark.parametrize("size", TEST_SIZES)
+@pytest.mark.parametrize("input_name", list(INPUTS))
+@pytest.mark.parametrize("sorter_name", list(SORTERS))
+def test_sort_correctness(sorter_name, input_name, size):
+    original = INPUTS[input_name](size)
+    if original is None:
+        pytest.skip(f"input generator '{input_name}' not implemented yet")
 
-    assert arr == expected
+    arr = list(original)
+    comparisons, swaps = SORTERS[sorter_name](arr)
+
+    assert is_correctly_sorted(original, arr)
+    print(f"{sorter_name} on {input_name}({size}): comparisons={comparisons}, swaps={swaps}")
+
+
+@pytest.mark.parametrize("input_name", ["random", "backwards", "sorted", "equal"])
+@pytest.mark.parametrize("size", [1, 2, 10, 1000, 100000])
+def test_mergesort_comparison_bound(input_name, size):
+    arr = INPUTS[input_name](size)
+    comparisons, _ = SORTERS["mergesort"](arr)
     # mergesort never does more than n * ceil(log2 n) comparisons
-    print(f"Expected O(nlogn): {size * max(0, (size - 1).bit_length())}")
-    print(f"Actual: {total_comparisons}")
-    assert total_comparisons <= size * max(0, (size - 1).bit_length())
-    print(f"{generator.__name__}({size}): comparisons={total_comparisons}, swaps={total_swaps}")
+    assert comparisons <= size * (size - 1).bit_length()
 
-def test_heapsort(size, rang):
-    arr = [random.randint(0,rang) for i in range(size)]
-    expected = sorted(arr)
 
-    comparisons, swaps = heapsort(arr)
+@pytest.mark.parametrize("input_name", ["random", "backwards", "sorted", "equal"])
+@pytest.mark.parametrize("size", [1, 2, 10, 1000, 100000])
+def test_heapsort_comparison_bound(input_name, size):
+    arr = INPUTS[input_name](size)
+    comparisons, _ = SORTERS["heapsort"](arr)
+    # each sift-down does <= 2 comparisons per level of a ceil(log2 n)-deep heap
+    assert comparisons <= 2 * size * (size - 1).bit_length() + 2 * size
 
-    assert arr == expected
 
-    print(f"Comparisons: {comparisons}\nSwaps: {swaps}")
+@pytest.mark.parametrize("pivotFunc", [randomPivot, midpointPivot, medianPivot])
+def test_partition(pivotFunc):
+    arr = generateRandom(1000)
+    original = list(arr)
+    low, high = 100, 899  # interior subarray, to catch out-of-range bugs
+    p, _, _ = partition(arr, low, high, pivotFunc)
 
-def test_partition():
-    pass
-
-def benchmark_time_complexity(n):
-    print(f"Expected O(nlogn): {n * (n.bit_length() - 1)}")
-    print(f"Actual: {n}")
-    pass
+    assert low <= p <= high
+    assert all(arr[i] <= arr[p] for i in range(low, p))
+    assert all(arr[i] > arr[p] for i in range(p + 1, high + 1))
+    # elements outside [low, high] are untouched; inside is a permutation
+    assert arr[:low] == original[:low] and arr[high + 1:] == original[high + 1:]
+    assert Counter(arr[low:high + 1]) == Counter(original[low:high + 1])
